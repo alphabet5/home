@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: nvidia
-      version: "v25.3.4"
+      version: "v25.10.0"
   install:
     crds: CreateReplace
     createNamespace: true

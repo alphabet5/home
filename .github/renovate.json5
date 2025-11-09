@@ -1,24 +1,18 @@
 {
-  "baseBranches": ["testing"],
+  "baseBranchPatterns": ["testing"],
   "gitAuthor": "Renovate Bot <renovate@local>",
-  "stabilityDays": 7,
+  "minimumReleaseAge": "7 days",
   "semanticCommits": "enabled",
-  "enabledManagers": [
-    "kubernetes",
-    "flux"
-  ],
-  "kubernetes": {
-    "fileMatch": ["\\.ya?ml$"]
-  },
-  "flux": {
-      "fileMatch": ["\\.yaml$"]
-    },
-
+  "enabledManagers": ["kubernetes", "flux"],
+  "kubernetes": {"managerFilePatterns": ["/\\.ya?ml$/"]},
+  "flux": {"managerFilePatterns": ["/\\.yaml$/"]},
   "packageRules": [
-    { "matchManagers": ["kubernetes"], "groupName": "k8s container images" },
-    { "matchManagers": ["flux"], "groupName": "Flux HelmRelease/HelmChart versions" }
+    {"matchManagers": ["kubernetes"], "groupName": "k8s container images"},
+    {
+      "matchManagers": ["flux"],
+      "groupName": "Flux HelmRelease/HelmChart versions"
+    }
   ],
-
   "customManagers": [
     {
       "customType": "regex",

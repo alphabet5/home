@@ -1,0 +1,30 @@
+---
+apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: fast
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    replicated:
+      size: 3
+    deviceClass: ssd
+    failureDomain: host
+  dataPools:
+    - name: replicated
+      replicated:
+        size: 3
+      deviceClass: ssd
+      failureDomain: host
+      parameters:
+        pg_num: "256"
+  preserveFilesystemOnDelete: true
+  metadataServer:
+    activeCount: 1
+    activeStandby: false
+    resources:
+      limits:
+        memory: "2048Mi"
+      requests:
+        cpu: "100m"
+        memory: "512Mi"

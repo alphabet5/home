@@ -1,0 +1,11 @@
+---
+apiVersion: ceph.rook.io/v1
+kind: CephClient
+metadata:
+  name: fast
+  namespace: rook-ceph
+spec:
+  caps:
+    mds: allow rw fsname=fast
+    mon: allow r
+    osd: allow rw tag cephfs data=fast

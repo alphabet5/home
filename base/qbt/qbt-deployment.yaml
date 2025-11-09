@@ -1,0 +1,119 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbt
+  namespace: qbt
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qbt
+  template:
+    metadata:
+      labels:
+        app: qbt
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "arm64"
+      containers:
+      - name: wireguard
+        image: alphabet5/boringtun-docker:latest
+        imagePullPolicy: Always
+        command:
+        - bash
+        args:
+        - -c
+          # boringtun-cli isn't used now, as speeds were significantly
+          # slower than using the wireguard kernel module.
+          # ~1000x slower.
+          # boringtun-cli --disable-drop-privileges -f wg0 &
+        - |
+          ip link add dev wg0 type wireguard
+          ip addr add $LOCAL_IP dev wg0
+          ip link set wg0 up
+          wg setconf wg0 $WG_CONFIG
+          ip route add $LOCAL_NETWORK dev eth0
+          ip route add $TUNNEL_NETWORK dev eth0
+          ip route add 0.0.0.0/1 dev wg0
+          ip route add 128.0.0.0/1 dev wg0
+          ip link set dev wg0 mtu 1386
+          sleep infinity;
+        env:
+          - name: LOCAL_NETWORK
+            value: "100.64.0.0/15"
+          - name: TUNNEL_NETWORK
+            value: "89.187.180.14/32"
+          - name: WG_CONFIG
+            value: "/config/wg0.conf"
+          - name: LOCAL_IP
+            value: "10.2.0.2/32"
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "SYS_TIME"]
+        volumeMounts:
+          - name: dev-net-tun
+            mountPath: /dev/net/tun
+            readOnly: false
+          - name: wireguard-config
+            mountPath: /config
+            readOnly: true
+        # this requires the network policy to block icmp
+        # if the tunnel is down.
+        livenessProbe:
+          exec:
+            command:
+            - ping 
+            - -c1 
+            - -W1 
+            - "8.8.8.8"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 2
+          failureThreshold: 10
+      - name: qbt
+        image: linuxserver/qbittorrent:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+          - name: PUID
+            value: "1000"
+          - name: PGID
+            value: "1000"
+          - name: UMASK_SET
+            value: "022"
+          - name: TZ
+            value: "America/Chicago"
+          - name: WEBUI_PORT
+            value: "8080"
+        volumeMounts:
+          - name: home-qbt
+            mountPath: /downloads
+          - name: qbt-config
+            mountPath: /config
+      volumes:
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: wireguard-config
+          secret:
+            secretName: wireguard-config
+        - name: home-qbt
+          persistentVolumeClaim:
+            claimName: home-qbt
+        - name: qbt-config
+          persistentVolumeClaim:
+            claimName: qbt-config
+      terminationGracePeriodSeconds: 10

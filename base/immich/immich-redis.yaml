@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-redis-config
+  namespace: immich
+data:
+  maxmemory : 40mb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-redis
+  namespace: immich
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-redis
+  namespace: immich
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+       app: redis
+    spec:
+      nodeSelector:
+        role: apps
+      containers:
+      - name: redis-container
+        image: redis:alpine
+        ports:
+          - containerPort: 6379
+        resources:
+          requests:
+            cpu: "10m"
+            memory: 50Mi
+        volumeMounts:
+          - name: data
+            mountPath: /redis-master-data
+          - name: redis-config
+            mountPath: /redis-master
+      volumes:
+      - name: redis-config
+        configMap:
+           name: immich-redis-config
+      - name: data
+        emptyDir: {}

@@ -1,0 +1,23 @@
+services:
+  builder:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: BUILDER2
+    privileged: true
+    volumes:
+      - ./debs:/output
+      - ./scripts:/opt/kernel/scripts
+    command:
+      - bash
+      - -c
+      - "scripts/build_kernel.sh"
+  apt:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: APT
+    ports:
+      - "8000:80"
+    volumes:
+      - ./debs:/usr/local/apache2/htdocs/debs

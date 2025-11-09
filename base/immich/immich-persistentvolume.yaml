@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: photos
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: rook-ceph.cephfs.csi.ceph.com
+    nodeStageSecretRef:
+      # node stage secret name
+      name: rook-ceph-client-fast
+      # node stage secret namespace where above secret is created
+      namespace: rook-ceph
+    volumeAttributes:
+      # optional file system to be mounted
+      "fsName": "fast"
+      # Required options from storageclass parameters need to be added in volumeAttributes
+      "clusterID": "rook-ceph"
+      "staticVolume": "true"
+      "rootPath": /fast/photos
+    # volumeHandle can be anything, need not to be same
+    # as PV name or volume name.
+    volumeHandle: immich-fast-photos
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  claimRef:
+    name: photos
+    namespace: immich

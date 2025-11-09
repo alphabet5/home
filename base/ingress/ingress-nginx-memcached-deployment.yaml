@@ -1,0 +1,42 @@
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: memcached
+#   namespace: ingress-nginx
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: memcached
+#   template:
+#     metadata:
+#       labels:
+#         app: memcached
+#     spec:
+#       containers:
+#       - name: memcached
+#         image: docker.io/memcached
+#         command:
+#         - memcached
+#         args:
+#         - '-m'
+#         - '64'
+#         ports:
+#         - containerPort: 11211
+#         imagePullPolicy: Always
+#         readinessProbe:
+#           tcpSocket:
+#             port: 11211
+#           periodSeconds: 10
+#           failureThreshold: 2
+#         livenessProbe:
+#           tcpSocket:
+#             port: 11211
+#           periodSeconds: 10
+#           failureThreshold: 30
+#         startupProbe:
+#           tcpSocket:
+#             port: 11211
+#           periodSeconds: 1
+#           failureThreshold: 30

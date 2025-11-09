@@ -1,0 +1,3 @@
+deb [arch=arm64 trusted=yes] http://archive.raspberrypi.com/debian/ bookworm main
+# Uncomment line below then 'apt-get update' to enable 'apt-get source'
+deb-src [arch=arm64 trusted=yes] http://archive.raspberrypi.com/debian/ bookworm main

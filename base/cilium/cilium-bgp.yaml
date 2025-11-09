@@ -1,0 +1,77 @@
+## Mikrotik config
+# comment=k8s
+# as=64512
+# router id = 192.168.1.1
+# remote addr = 192.168.1.0/24
+# remote as = 64513
+# local addr 192.168.1.1
+# local port = 179
+# local role = ebgp
+# listen = true
+# hold time 00:00:09
+# keepalive 3.00
+# routing table = main
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: bgp-advertisements
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+    - advertisementType: "Service"
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector:
+        matchExpressions:
+          - {key: io.kubernetes.service.namespace, operator: Exists}
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: cilium-bgp
+spec:
+  nodeSelector:
+    matchLabels:
+      enable-bgp: "true"
+  bgpInstances:
+  - name: "instance-64513"
+    localASN: 64513
+    peers:
+    - name: "core"
+      peerASN: 64512
+      peerAddress: 192.168.1.1
+      peerConfigRef:
+        name: "core"
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: core
+spec:
+  timers:
+    # In datacenter networks where Kubernetes clusters are deployed, it is generally
+    # recommended to set the HoldTimer and KeepaliveTimer to a lower value for faster
+    # possible failure detection. For example, you can set the minimum possible values
+    # holdTimeSeconds=9 and keepAliveTimeSeconds=3.
+    connectRetryTimeSeconds: 12
+    holdTimeSeconds: 9
+    keepAliveTimeSeconds: 3
+  # default
+  ebgpMultihop: 1
+  # By default, when BGP is operating in active mode (with the Cilium agent initiating the TCP connection)
+  # the destination port is 179 and the source port is ephemeral.
+  transport:
+    peerPort: 179
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 15
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: "bgp"

@@ -1,0 +1,100 @@
+# apiVersion: helm.toolkit.fluxcd.io/v2
+# kind: HelmRelease
+# metadata:
+#   name: ingress-nginx
+#   namespace: flux-system
+# spec:
+#   chart:
+#     spec:
+#       chart: ingress-nginx
+#       reconcileStrategy: ChartVersion
+#       sourceRef:
+#         kind: HelmRepository
+#         name: ingress-nginx
+#       version: "4.12.0"
+#   interval: 5m
+#   timeout: 5m
+#   releaseName: ingress-nginx
+#   targetNamespace: ingress-nginx
+#   values:
+#     nameOverride: ingress-nginx
+#     fullnameOverride: ingress-nginx
+#     commonLabels:
+#       app: ingress-nginx
+#     controller:
+#       # extraEnvs:
+#       # - name: TURNSTILE_SECRET
+#       #   valueFrom:
+#       #     secretKeyRef:
+#       #       key: TURNSTILE_SECRET
+#       #       name: ingress-secrets
+#       allowSnippetAnnotations: "true"
+#       disable-ipv6: "true"
+#       disable-ipv6-dns: "true"
+#       nodeSelector:
+#         role: apps
+#       podAnnotations:
+#         prometheus.io/scrape: "true"
+#         prometheus.io/port: "10254"
+#       metrics:
+#         enabled: true
+#         serviceMonitor:
+#           enabled: true
+#       ingressClassResource:
+#         name: ingress-nginx
+#         enabled: true
+#         default: true
+#         controllerValue: "k8s.io/ingress-nginx"
+#       # resources:
+#       #   requests:
+#       #     cpu: 4
+#       #     memory: 3Gi
+#       service:
+#         type: LoadBalancer
+#         annotations: 
+#           # lbipam.cilium.io/ips: "192.168.1.128"
+#           metallb.universe.tf/address-pool: ingress-pool
+#           metallb.universe.tf/loadBalancerIPs: "192.168.1.127"
+#       kind: Deployment
+#       minAvailable: 1
+#       autoscaling:
+#         enabled: true
+#         minReplicas: 1
+#         maxReplicas: 2
+#       extraArgs:
+#         default-ssl-certificate: "ingress-nginx/jburt-me"
+#       config:
+#         annotations-risk-level: critical
+#         log-format-escape-json: "true"
+#         #  "requestID": "$opentelemetry_context_traceparent"
+#         log-format-upstream: '{"timestamp": "$time_iso8601", "xApiKey": "$http_x_api_key", "origin": "$http_origin", "proxyUpstreamName": "$proxy_upstream_name", "ingressName": "$ingress_name", "ingressNamespace": "$namespace", "serviceName": "$service_name", "servicePort": "$service_port", "proxyAlternativeUpstreamName": "$proxy_alternative_upstream_name","upstreamStatus": "$upstream_status", "upstreamAddr": "$upstream_addr", "requestMethod": "$request_method", "requestUrl": "$host$request_uri", "requestUri": "$request_uri", "requestPath": "$uri", "httpStatus": $status, "requestSize": $request_length, "responseSize": "$upstream_response_length", "userAgent": "$http_user_agent", "remoteIp": "$remote_addr", "referer": "$http_referer", "cfRay": "$http_cf_ray", "realIp": "$http_cf_connecting_ip", "latency": $upstream_response_time, "protocol":"$server_protocol", "requestQuery": "$args"}'
+#         proxy-real-ip-cidr: "10.0.0.0/8,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,35.192.194.209/32,35.192.194.208/32"
+#         use-forwarded-headers: "true"
+#         enable-real-ip: "true"
+#         forwarded-for-header: "CF-Connecting-IP"
+#         limit-req-status-code: "429"
+#         # this adds the trace id to the response headers.
+#         # location-snippet: |
+#         #   set $dummy_val $opentelemetry_context_traceparent;
+#         #   add_header trace-id $opentelemetry_context_traceparent;
+#         # enable-opentelemetry: "true"
+#         # otlp-collector-host: "100.65.0.13"
+#         # opentelemetry-operation-name: "HTTP $request_method $service_name $uri"
+#         # opentelemetry-trust-incoming-span: "true"
+#         # otel-sampler-parent-based: "true"
+#         # otel-sampler-ratio: "1.0"
+#         # otel-sampler: AlwaysOn
+#         # otel-service-name: "ingress-nginx"
+#         # you have to load the env under main so it's available in locations
+#         main-snippet: |
+#           env TURNSTILE_SECRET;
+#         hsts: true # default
+#         hsts-include-subdomains: false
+#         # recommendation from cf
+#         upstream-keepalive-timeout: "900" 
+#     # defaultBackend:
+#     #   enabled: true
+#     #   image:
+#     #     registry: registry.k8s.io
+#     #     image: ingress-nginx/nginx-errors
+#     #     tag: "v20230505@sha256:3600dcd1bbd0d05959bb01af4b272714e94d22d24a64e91838e7183c80e53f7f"

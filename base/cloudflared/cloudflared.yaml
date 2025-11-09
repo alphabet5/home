@@ -1,0 +1,131 @@
+# john.burt@mba ~ % cloudflared tunnel create immich
+# Tunnel credentials written to .cloudflared/....json. cloudflared chose this file based on where your origin certificate was found. Keep this file secret. To revoke these credentials, delete the tunnel.
+
+# Created tunnel immich with id ...
+
+# john.burt@mba ~ % cloudflared tunnel route dns immich immich.jburt.me
+# 2025-03-16T05:29:42Z INF Added CNAME immich.jburt.me which will route to this tunnel tunnelID=4840943f-871a-42ba-8be1-d798596d9250
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudflare
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: cloudflare
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+      - name: cloudflared
+        image: cloudflare/cloudflared:2025.2.1
+        args:
+        - tunnel
+        # Points cloudflared to the config file, which configures what
+        # cloudflared will actually do. This file is created by a ConfigMap
+        # below.
+        - --config
+        - /etc/cloudflared/config/config.yaml
+        - run
+        livenessProbe:
+          httpGet:
+            # Cloudflared has a /ready endpoint which returns 200 if and only if
+            # it has an active connection to the edge.
+            path: /ready
+            port: 2000
+          failureThreshold: 1
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cloudflared/config
+          readOnly: true
+        # Each tunnel has an associated "credentials file" which authorizes machines
+        # to run the tunnel. cloudflared will read this file from its local filesystem,
+        # and it'll be stored in a k8s secret.
+        - name: creds
+          mountPath: /etc/cloudflared/creds/
+          readOnly: true
+        - name: creds
+          mountPath: /etc/cloudflared/cert.pem
+          subPath: cert.pem
+          readOnly: true
+      volumes:
+      - name: creds
+        secret:
+          # By default, the credentials file will be created under ~/.cloudflared/<tunnel ID>.json
+          # when you run `cloudflared tunnel create`. You can move it into a secret by using:
+          # ```sh
+          # kubectl create secret generic tunnel-credentials \
+          # --from-file=credentials.json=/Users/yourusername/.cloudflared/<tunnel ID>.json
+          # ```
+          secretName: tunnel-credentials
+      # Create a config.yaml file from the ConfigMap below.
+      - name: config
+        configMap:
+          name: cloudflared
+          items:
+          - key: config.yaml
+            path: config.yaml
+---
+# This ConfigMap is just a way to define the cloudflared config.yaml file in k8s.
+# It's useful to define it in k8s, rather than as a stand-alone .yaml file, because
+# this lets you use various k8s templating solutions (e.g. Helm charts) to
+# parameterize your config, instead of just using string literals.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared
+  namespace: cloudflare
+data:
+  config.yaml: |
+    # Name of the tunnel you want to run
+    tunnel: immich
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    # Serves the metrics server under /metrics and the readiness server under /ready
+    metrics: 0.0.0.0:2000
+    # Autoupdates applied in a k8s pod will be lost when the pod is removed or restarted, so
+    # autoupdate doesn't make sense in Kubernetes. However, outside of Kubernetes, we strongly
+    # recommend using autoupdate.
+    no-autoupdate: true
+    # The `ingress` block tells cloudflared which local service to route incoming
+    # requests to. For more about ingress rules, see
+    # https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/configuration/ingress
+    #
+    # Remember, these rules route traffic from cloudflared to a local service. To route traffic
+    # from the internet to cloudflared, run `cloudflared tunnel route dns <tunnel> <hostname>`.
+    # E.g. `cloudflared tunnel route dns example-tunnel tunnel.example.com`.
+    ingress:
+    - hostname: immich.jburt.me
+      service: https://immich-server.immich:2283
+    # This rule matches any traffic which didn't match a previous rule, and responds with HTTP 404.
+    - service: http_status:404
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: tunnel-credentials
+  namespace: cloudflare
+  annotations:
+    sealedsecrets.bitnami.com/cluster-wide: "true"
+spec:
+  encryptedData:
+    credentials.json: AgCSvAx90unjwxcDjMsdOwZ/iapbv14mRQe/ERSJ35HkI0cl1GprRLQ4sfuB0UqPrOkTmwIOArNNAIVcYThPL/SY7i5fJwaFU0yVnRRDvXfKGBPvoOOufwqJzhkltz3xIGJe2Y8u9DUbKOYN737Dnm4jy/ztQIM3aU+sEKqahH5fVS0np3cOFObaGU0zj9XLSjxv9Ocn1pHZHvgxWzglrfe6mvmlALwmixlaXkC80ESmA3p+QU3+bUcoWG3++zegIfhVJ0tMi34XIQv9sOsI3kfYKtLX9UHqDV+TosQAmPoDNFVcyjDZ/sGgjJL+3moSvL8N+lMlYyg/BiZySbu+MowNWDFwZwBd0DvhXS9lBVeIg28dUagOKBJbmJQtFhLVp+dOBomNJwvjFxrR5FaXzyOjcQ4OeT2sSW7cydznpoif7UNbMg1uGzr93WKMY++AQ0e1O5D87n2/fs5Ek+m4TOx05hxAY7sLFT8Qw5wy9gSPzmrhhTCQc1aNATq4vA90y4ZHuR9fXA9ksq2s/S/WzfJJ6E8KXZvm0le5L0TxY/Konohie8Y8gGlDOx9hcZiwoQuk2jy5l/cBKgnf8a9ZRwoO46az1metidMiv/46XIEVWtLgUlV8v/j6RvcNrT1WnHocgGYuDawQU22hbSUzpF8p+Oe4LQwetZWibSP1vCOy78FHM7FV9pgq5FPvHh1EKF8L/qxUHTFrtfpNC4gh8Y1Ilb7eKVO45gTDn8DU+VDFOc08ZZro6k1rG/kOIhKkNivxc/pPopeDO6Qfvli3tz8Z2HGf0HTlX+s4M60x6uiFHABOSpqwgu6KGOKg4bjUemzjZVPQktmN5zZa/HkOknIN63Ws9TgMpFjHH3CYOtLZt4U2yqdrKvT1VtiHi/qmWNi1CxwTjBKhZOhr2bw2eYEpt8ApgOjdhd21vhhjoJN+5w==
+    cert.pem: AgCYj3mqHbyd7ycZdF5wZF/tU04S7gjfn0B3F9aY23qQTd9nnu6AeeIWtjBWynnwLzRmt53AhjBNkzHEe7AnCrMKUjbJ2EF+f87s8z4rbbSAvmFDgQQ+iXJNSewHgE30kcGpdc8aDWOib0LTw3n58mxZTAmyPM0fsgjs6/5m39RynB01wT+rZzZ3u7smmzm5n+nyJae8sKjTWjpwLMbD0SN544jMdXGDDiAqW7dw/v0dIKqSOb76PoFUxqng8c1dxVIGtlQoRd4Fm0fgc/ng++kjWW0l2rIj7dKspBSFwpqN/G2lx729KESkVvnl5/nuTD9JHAELYk4NW3kCzdiL1UjY7vL1THFrlwkm31UmnK9HnkyMO0QrlREDfYsy6dJzjMl/UxLA9JJo3cBN2iWCY0P9IdcyVDtDo/TQKcMgDr9foVW6NCn0/bwsdpe88PYo727Sfl5Hqf/URrPcomrZKlyWaVWZBqoBa4mhpnFzu6y5XfD1miRc53ZyV851xTR0IWPaIrywwkYeiP8TUDQjYKcrk7CrG9Fv6Ug9MJXocjE+RNHKjN3zHwfjehTLRCz3AqzhcrQJxipdTKInm9GnuJK1dg2i6uWGJy1Ej291eUSD8Ye/rd6xMWP7m6KniUOvBqv949ag9NsPb+Fr5Zqn+rIrOag0M35ZrqUwf4buk39ntWhWcULxO2AlHd17sSWOyEzxY+wvSWA0m7x80RYb7yx2/rU4YCB0cJ47nodZ4OdT2Jam/ch3zn/ddeNm7PVp4SZsQ1fipWyAvqHzxOUNtR4yffzbltWU2UUXfI+r0X3H5hOxCtecYjIp7oxRdkeXcBNe91VSuG/lpb3i/msD50DuOLK2rkpqR8gROxa0TmuogLejP2CpDWLWndw/GFgKUzZt5YLO2oYW3kvvoFUrPLlvq5+n/RxU0e1ICY6wmlWyPOGyBEbIuAxV6YggTmMlp9oQDsOsr712/ncN7eZtJzBP+ZHLLuWWZ5j3zQ+ZNANkvVJ1CZtyHb6JvPCeqnemhR4Otz8ASuV5BQo7e7ZQt5LFQvx/1xQ685nJCg==
+  template:
+    metadata:
+      name: tunnel-credentials
+      namespace: cloudflare
+      annotations:
+        sealedsecrets.bitnami.com/cluster-wide: "true"
+    type: Opaque

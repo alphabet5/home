@@ -1,0 +1,22 @@
+# The lb here can be used to directly connect to the primary postgres instance.
+# Ideally it's only accessible from within the cluster, but I ran into issues
+# restoring a db backup over kubectl port-forward, and this was easier than
+# figuring out kubectl cnpg or port-forward.
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   labels:
+#     cnpg.io/cluster: immich-db
+#   name: immich-db-rw-temporary-lb
+#   namespace: immich
+# spec:
+#   ports:
+#   - name: postgres
+#     port: 5432
+#     protocol: TCP
+#     targetPort: 5432
+#   selector:
+#     cnpg.io/cluster: immich-db
+#     cnpg.io/instanceRole: primary
+#   type: LoadBalancer

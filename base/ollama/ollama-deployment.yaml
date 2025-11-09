@@ -1,0 +1,143 @@
+# ---
+# # PersistentVolumeClaim for storing Ollama models
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: ollama-models-pvc
+#   namespace: default
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 20Gi  # Adjust size based on your model storage needs
+#   storageClassName: ""  # Use your cluster's default storage class or specify one
+
+# ---
+# # ConfigMap for init script
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: ollama-init-script
+#   namespace: default
+# data:
+#   init-models.sh: |
+#     #!/bin/bash
+#     echo "Starting Ollama server in background..."
+#     ollama serve &
+#     OLLAMA_PID=$!
+    
+#     echo "Waiting for Ollama server to be ready..."
+#     until curl -f http://localhost:11434/api/tags >/dev/null 2>&1; do
+#       echo "Waiting for Ollama server..."
+#       sleep 2
+#     done
+    
+#     echo "Ollama server is ready. Pulling models..."
+#     ollama pull gemma2:2b  # Using a smaller model for faster downloads
+#     # ollama pull gemma2:9b  # Uncomment for larger model
+#     # Add more models as needed
+    
+#     echo "Models pulled successfully. Stopping server..."
+#     kill $OLLAMA_PID
+#     wait $OLLAMA_PID 2>/dev/null
+#     echo "Init complete."
+
+# ---
+# # Deployment
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: ollama
+#   namespace: default
+#   labels:
+#     app: ollama
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: ollama
+#   template:
+#     metadata:
+#       labels:
+#         app: ollama
+#     nodeSelector:
+#       gpu: "true"
+#     spec:
+#       initContainers:
+#       - name: model-puller
+#         image: ollama/ollama:latest
+#         command: ["/bin/bash", "/scripts/init-models.sh"]
+#         volumeMounts:
+#         - name: ollama-data
+#           mountPath: /root/.ollama
+#         - name: init-script
+#           mountPath: /scripts
+#         env:
+#         - name: OLLAMA_HOST
+#           value: "0.0.0.0"
+#         resources:
+#           requests:
+#             memory: "1Gi"
+#             cpu: "500m"
+#           # limits:
+#           #   memory: "4Gi"
+#           #   cpu: "2"
+#       containers:
+#       - name: ollama
+#         image: ollama/ollama:latest
+#         ports:
+#         - containerPort: 11434
+#           name: http
+#         env:
+#         - name: OLLAMA_HOST
+#           value: "0.0.0.0"
+#         volumeMounts:
+#         - name: ollama-data
+#           mountPath: /root/.ollama
+#         resources:
+#           requests:
+#             memory: "2Gi"
+#             cpu: "1"
+#           limits:
+#             memory: "8Gi"
+#             cpu: "4"
+#         livenessProbe:
+#           httpGet:
+#             path: /api/tags
+#             port: 11434
+#           initialDelaySeconds: 30
+#           periodSeconds: 10
+#         readinessProbe:
+#           httpGet:
+#             path: /api/tags
+#             port: 11434
+#           initialDelaySeconds: 5
+#           periodSeconds: 5
+#       volumes:
+#       - name: ollama-data
+#         persistentVolumeClaim:
+#           claimName: ollama-models-pvc
+#       - name: init-script
+#         configMap:
+#           name: ollama-init-script
+#           defaultMode: 0755
+
+# ---
+# # Service
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: ollama-service
+#   namespace: default
+#   labels:
+#     app: ollama
+# spec:
+#   selector:
+#     app: ollama
+#   ports:
+#   - name: http
+#     port: 11434
+#     targetPort: 11434
+#     protocol: TCP
+#   type: ClusterIP

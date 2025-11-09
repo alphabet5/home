@@ -1,0 +1,42 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  chart:
+    spec:
+      chart: cert-manager
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: cert-manager
+      version: "1.19.1"
+  install:
+    crds: CreateReplace
+    createNamespace: true
+  interval: 5m
+  timeout: 5m
+  releaseName: cert-manager
+  targetNamespace: cert-manager
+  values:
+    global:
+      revisionHistoryLimit: 2
+      leaderElection:
+        namespace: cert-manager
+        leaseDuration: 30s
+        renewDeadline: 20s
+        retryPeriod: 5s
+    crds:
+      enabled: true
+    replicaCount: 3
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 0
+        maxUnavailable: 1
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    nameOverride: cert-manager
+    fullnameOverride: cert-manager

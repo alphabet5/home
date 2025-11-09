@@ -1,0 +1,137 @@
+---
+# ConfigMap containing the Plan template
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plan-template
+  namespace: system-upgrade
+data:
+  plan.yaml: |
+    apiVersion: upgrade.cattle.io/v1
+    kind: Plan
+    metadata:
+      name: apt-get
+      namespace: system-upgrade
+    spec:
+      concurrency: 1
+      jobActiveDeadlineSecs: 3600
+      serviceAccountName: system-upgrade
+      nodeSelector:
+        matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values:
+              - linux
+      secrets:
+        - name: update-script
+          path: /host/run/system-upgrade/secrets/
+      drain:
+        force: true
+      version: "2025.01.01"
+      upgrade:
+        image: bitnami/kubectl:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -eu
+            /bin/bash /host/run/system-upgrade/secrets/upgrade.sh
+        securityContext:
+          runAsUser: 0
+          privileged: true
+          allowPrivilegeEscalation: true
+          seccompProfile:
+            type: Unconfined
+      tolerations:
+        - operator: "Exists"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: update
+  namespace: system-upgrade
+spec:
+  schedule: "0 0 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: plan-updater
+          restartPolicy: OnFailure
+          containers:
+          - name: version-updater
+            # leaving this as latest, it's fine if it breaks and easer than updating
+            image: bitnami/kubectl:latest
+            imagePullPolicy: Always
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              PLAN_NAME="apt-get"
+              NAMESPACE="system-upgrade"
+              CONFIGMAP_NAME="plan-template"
+              
+              # Generate new version based on current date
+              NEW_VERSION=$(date +"%Y.%m.%d")
+              echo "New version will be: $NEW_VERSION"
+              
+              # Replace the template date with current date and apply
+              sed "s/2025\.01\.01/$NEW_VERSION/g" /tmp/plan-template/plan.yaml | kubectl apply -f -
+              
+              echo "Successfully applied Plan with version $NEW_VERSION"
+              
+              # Verify the plan was applied correctly
+              if kubectl get plan "$PLAN_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+                APPLIED_VERSION=$(kubectl get plan "$PLAN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.version}')
+                echo "Plan applied with version: $APPLIED_VERSION"
+              else
+                echo "Error: Failed to apply Plan"
+                exit 1
+              fi
+            volumeMounts:
+            - name: plan-template
+              mountPath: /tmp/plan-template
+              readOnly: true
+          volumes:
+          - name: plan-template
+            configMap:
+              name: plan-template
+---
+# ServiceAccount for the CronJob
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: plan-updater
+  namespace: system-upgrade
+---
+# Role with permissions to read and update Plans, and read ConfigMaps
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: plan-updater
+  namespace: system-upgrade
+rules:
+- apiGroups: ["upgrade.cattle.io"]
+  resources: ["plans"]
+  verbs: ["get", "list", "patch", "update", "create", "apply"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: plan-updater
+  namespace: system-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: plan-updater
+subjects:
+- kind: ServiceAccount
+  name: plan-updater
+  namespace: system-upgrade

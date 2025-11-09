@@ -1,0 +1,96 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: home-plex
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: rook-ceph.cephfs.csi.ceph.com
+    nodeStageSecretRef:
+      # node stage secret name
+      name: rook-ceph-client-home
+      # node stage secret namespace where above secret is created
+      namespace: rook-ceph
+    volumeAttributes:
+      # "monitors": 192.168.1.111:6789,192.168.1.112:6789,192.168.1.113:6789,192.168.1.114:6789,192.168.1.115:6789"
+      # optional file system to be mounted
+      "fsName": "home"
+      # Required options from storageclass parameters need to be added in volumeAttributes
+      "clusterID": "rook-ceph"
+      "staticVolume": "true"
+      "rootPath": /home/media/new
+    # volumeHandle can be anything, need not to be same
+    # as PV name or volume name. keeping same for brevity
+    volumeHandle: home-plex
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  claimRef:
+    name: home-plex
+    namespace: plex
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: home-plex
+  namespace: plex
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: home-plex
+  volumeMode: Filesystem
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: plex-config
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: rook-ceph.cephfs.csi.ceph.com
+    nodeStageSecretRef:
+      # node stage secret name
+      name: rook-ceph-client-fast
+      # node stage secret namespace where above secret is created
+      namespace: rook-ceph
+    volumeAttributes:
+      # "monitors": 192.168.1.111:6789,192.168.1.112:6789,192.168.1.113:6789,192.168.1.114:6789,192.168.1.115:6789"
+      # optional file system to be mounted
+      "fsName": "fast"
+      # Required options from storageclass parameters need to be added in volumeAttributes
+      "clusterID": "rook-ceph"
+      "staticVolume": "true"
+      "rootPath": /fast/plex-config
+    # volumeHandle can be anything, need not to be same
+    # as PV name or volume name. keeping same for brevity
+    volumeHandle: fast-plex
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  claimRef:
+    name: plex-config
+    namespace: plex
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-config
+  namespace: plex
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: plex-config
+  volumeMode: Filesystem
+  storageClassName: ""

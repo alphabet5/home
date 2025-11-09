@@ -1,0 +1,497 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: flux-system
+spec:
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+      version: "79.4.1"
+  interval: 5m
+  install:
+    crds: CreateReplace
+  releaseName: prometheus
+  targetNamespace: prometheus-system
+  values:
+    fullnameOverride: prometheus
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kube-state-metrics:
+      rbac:
+        extraRules:
+          - apiGroups:
+              - source.toolkit.fluxcd.io
+              - kustomize.toolkit.fluxcd.io
+              - helm.toolkit.fluxcd.io
+              - notification.toolkit.fluxcd.io
+              - image.toolkit.fluxcd.io
+            resources:
+              - gitrepositories
+              - buckets
+              - helmrepositories
+              - helmcharts
+              - ocirepositories
+              - kustomizations
+              - helmreleases
+              - alerts
+              - providers
+              - receivers
+              - imagerepositories
+              - imagepolicies
+              - imageupdateautomations
+            verbs: [ "list", "watch" ]
+      customResourceState:
+        enabled: true
+        config:
+          spec:
+            resources: # https://github.com/fluxcd/flux2-monitoring-example/blob/main/monitoring/controllers/kube-prometheus-stack/kube-state-metrics-config.yaml
+              - groupVersionKind:
+                  group: kustomize.toolkit.fluxcd.io
+                  version: v1
+                  kind: Kustomization
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux Kustomization resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, lastAppliedRevision ]
+                      source_name: [ spec, sourceRef, name ]
+              - groupVersionKind:
+                  group: helm.toolkit.fluxcd.io
+                  version: v2
+                  kind: HelmRelease
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux HelmRelease resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, history, "0", chartVersion ]
+                      chart_name: [ status, history, "0", chartName ]
+                      chart_app_version: [ status, history, "0", appVersion ]
+                      chart_ref_name: [ spec, chartRef, name ]
+                      chart_source_name: [ spec, chart, spec, sourceRef, name ]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: GitRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux GitRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, artifact, revision ]
+                      url: [ spec, url ]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: HelmRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux HelmRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, artifact, revision ]
+                      url: [ spec, url ]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: HelmChart
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux HelmChart resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, artifact, revision ]
+                      chart_name: [ spec, chart ]
+                      chart_version: [ spec, version ]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1beta2
+                  kind: OCIRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux OCIRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [ metadata, name ]
+                    labelsFromPath:
+                      exported_namespace: [ metadata, namespace ]
+                      ready: [ status, conditions, "[type=Ready]", status ]
+                      suspended: [ spec, suspend ]
+                      revision: [ status, artifact, revision ]
+                      url: [ spec, url ]
+    prometheus-node-exporter:
+      monitor:
+        enabled: true
+        relabelings:
+          - sourceLabels: [__meta_kubernetes_pod_node_name]
+            separator: ;
+            regex: ^(.*)$
+            targetLabel: nodename
+            replacement: $1
+            action: replace
+          - sourceLabels:
+              - '__meta_kubernetes_pod_node_name'
+            targetLabel: 'instance'
+            regex: '^(.*)$'
+            replacement: '$1:9100'
+    defaultRules:
+      create: true
+      disabled:
+        PrometheusDuplicateTimestamps: true
+      rules:
+        alertmanager: true
+        etcd: true
+        configReloaders: true
+        general: true
+        k8s: true
+        kubeApiserverAvailability: true
+        kubeApiserverBurnrate: true
+        kubeApiserverHistogram: true
+        kubeApiserverSlos: true
+        kubeControllerManager: false
+        kubelet: true
+        kubeProxy: false
+        kubePrometheusGeneral: true
+        kubePrometheusNodeRecording: true
+        kubernetesApps: false
+        kubernetesResources: false
+        kubernetesStorage: true
+        kubernetesSystem: true
+        kubeSchedulerAlerting: false
+        kubeSchedulerRecording: false
+        kubeStateMetrics: true
+        network: true
+        node: true
+        nodeExporterAlerting: false
+        nodeExporterRecording: true
+        prometheus: true
+        prometheusOperator: true
+      labels:
+        role: alert-rule
+      # additionalRuleLabels:
+      #   environment: 
+      #   region: 
+      #   cluster: 
+      additionalRuleGroupLabels:
+        kubeApiserverBurnrate:
+          priority: low
+        kubeStateMetrics:
+          priority: low
+        prometheus:
+          priority: low
+        prometheusOperator:
+          priority: low
+        etcd:
+          priority: low
+    alertmanager:
+      alertmanagerSpec:
+        logFormat: json
+        replicas: 2
+        podAntiAffinity: "hard"
+        nodeSelector:
+          apps: "true"
+      ingress:
+        enabled: false
+        # annotations:
+        #   nginx.ingress.kubernetes.io/enable-access-log: "false"
+        #   nginx.ingress.kubernetes.io/enable-opentelemetry: "false"
+        # hosts:
+        # - am.jburt.me
+        # tls:
+        #   - hosts:
+        #     - am.jburt.me
+        # paths:
+        # - /
+        # pathType: Prefix
+        # ingressClassName: ingress-nginx
+      config:
+        global:
+          resolve_timeout: 5m
+          http_config:
+            follow_redirects: true
+            enable_http2: true
+        route:
+          group_by: [alertname, namespace, job]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+          # routes:
+          # - continue: true
+          #   routes:
+          #   - matchers:
+          #     - slack="john-sandbox"
+          #     receiver: john-sandbox
+          #     repeat_interval: 1m
+          #     continue: true
+          # - continue: true
+          #   matchers:
+          #   - pagerduty="pagerduty-testing"
+          #   receiver: pagerduty-testing
+        receivers:
+        - name: 'null'
+        # - name: john-sandbox
+        #   slack_configs:
+        #   - channel: '#john-sandbox2'
+        #     api_url: https://hooks.slack.com/services/...
+        #     color: '{{ template "slack.color" . }}'
+        #     title: '{{ template "title" . }}'
+        #     text: '{{ template "description" . }}'
+        #     send_resolved: true
+        #     actions:
+        #       - type: button
+        #         text: 'Runbook :green_book:'
+        #         url: '{{ (index .Alerts 0).Annotations.runbook_url }}'
+        #       - type: button
+        #         text: 'Query :mag:'
+        #         url: '{{ (index .Alerts 0).GeneratorURL }}'
+        #       - type: button
+        #         text: 'Dashboard :chart_with_upwards_trend:'
+        #         url: '{{ (index .Alerts 0).Annotations.dashboard_url }}'
+        #       - type: button
+        #         text: 'Silence :no_bell:'
+        #         url: '{{ template "__alert_silence_link" . }}'
+        # - name: pagerduty-testing
+        #   pagerduty_configs:
+        #   - send_resolved: true # default, required
+        #     routing_key: ...
+        #     url: https://events.pagerduty.com/v2/enqueue
+        #     client: ${cluster:=notset}
+        #     description: '{{ template "title" . }}'
+        #     details: 
+        #       description: '{{ template "description" . }}'
+        #     links: 
+        #       - text: "Runbook"
+        #         href: '{{ (index .Alerts 0).Annotations.runbook_url }}'
+        #       - text: "Query"
+        #         href: '{{ (index .Alerts 0).GeneratorURL }}'
+        #       - text: "Dashboard"
+        #         href: '{{ (index .Alerts 0).Annotations.dashboard_url }}'
+        #       - text: "Silence"
+        #         href: '{{ template "__alert_silence_link" . }}'
+        # templates:
+        # - '/etc/alertmanager/config/*.tmpl'
+      # templateFiles:
+      #   all.tmpl: |-
+      #     {{ define "__alert_silence_link" -}}
+      #         {{ .ExternalURL }}/#/silences/new?filter=%7B
+      #         {{- range .CommonLabels.SortedPairs -}}
+      #             {{- if ne .Name "alertname" -}}
+      #                 {{- .Name }}%3D"{{- .Value -}}"%2C%20
+      #             {{- end -}}
+      #         {{- end -}}
+      #         alertname%3D"{{- .CommonLabels.alertname -}}"%7D
+      #     {{- end }}
+      #     {{ define "__alert_severity" -}}
+      #         {{- if eq .CommonLabels.severity "critical" -}}
+      #         *Severity:* Critical
+      #         {{- else if eq .CommonLabels.severity "warning" -}}
+      #         *Severity:* Warning
+      #         {{- else if eq .CommonLabels.severity "info" -}}
+      #         *Severity:* Info
+      #         {{- else -}}
+      #         *Severity:* :question: {{ .CommonLabels.severity }}
+      #         {{- end }}
+      #         {{- if eq .CommonLabels.priority "high" -}}
+      #         {{ printf "" }}
+      #      *Priority:* high
+      #         {{- else if eq .CommonLabels.priority "low" -}}
+      #         {{ printf "" }}
+      #      *Priority:* low
+      #         {{- else -}}
+      #         {{ printf "" }}
+      #      *Priority:* :question: {{ .CommonLabels.priority }}
+      #         {{- end }}
+      #     {{- end }}
+      #     {{ define "title" -}}
+      #       [{{ .Status | toUpper -}}
+      #       {{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{- end -}}
+      #       ] {{ (index .Alerts 0).Labels.alertname }}{{ if gt (len .Alerts.Firing) 1 }}: {{ (index .Alerts 0).Annotations.summary }}{{ end }}
+      #     {{- end }}
+      #     {{ define "description" -}}
+      #       {{ template "__alert_severity" . }}
+      #       *Common Labels*
+      #       {{ range .CommonLabels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+      #       {{ end }}
+      #       {{- if ((index .Alerts 0).Annotations.overview) }}
+      #       *Overview:* 
+      #       {{ (index .Alerts 0).Annotations.overview }}
+      #       {{- end }}
+      #       {{- if ((index .Alerts 0).Annotations.description) }}
+      #       {{- end }}
+      #       {{- range .Alerts }}
+      #       ---
+      #       *Labels:*
+      #       {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+      #       {{ end }}
+      #       {{ .Annotations.description }}
+      #       {{- end }}
+      #     {{- end }}
+      #     {{ define "slack.color" -}}
+      #         {{ if eq .Status "firing" -}}
+      #             {{ if eq .CommonLabels.severity "warning" -}}
+      #                 warning
+      #             {{- else if eq .CommonLabels.severity "critical" -}}
+      #                 danger
+      #             {{- else -}}
+      #                 #439FE0
+      #             {{- end -}}
+      #         {{ else -}}
+      #         good
+      #         {{- end }}
+      #     {{- end }}
+    prometheusOperator:
+      logFormat: json
+      nodeSelector:
+        apps: "true"
+    prometheus:
+      prometheusSpec:
+        scrapeInterval: 30s
+        replicas: 2
+        resources:
+          limits:
+            memory: "2048Mi"
+          requests:
+            cpu: "100m"
+            memory: "1024Mi"
+        podAntiAffinity: "hard"
+        externalLabels:
+          prometheus_replica: $(POD_NAME)
+        enableFeatures:
+        - expand-external-labels
+        logFormat: json
+        logLevel: info
+        nodeSelector:
+          apps: "true"
+        podMonitorSelector:
+          matchLabels: ~
+        serviceMonitorSelector:
+          matchLabels: ~
+        serviceMonitorSelectorNilUsesHelmValues: false
+        serviceMonitorNamespaceSelector:
+          matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: Exists
+            values:
+        podMonitorSelectorNilUsesHelmValues: false
+        podMonitorNamespaceSelector:
+          matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: Exists
+            values:
+        ruleSelectorNilUsesHelmValues: false
+        ruleNamespaceSelector:
+          matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: Exists
+            values:
+        ruleSelector:
+          matchLabels:
+            role: alert-rule
+        retentionSize: 9GiB
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+              storageClassName: local-path
+      #   thanos:
+      #     blockSize: 2h
+      #     objectStorageConfig:
+      #       secret:
+      #         type: S3
+      #         config:
+      #           bucket: thanos
+      #           endpoint: "s3.jburt.me"
+      #           insecure: false
+      #           signature_version2: true
+      #           bucket_lookup_type: path
+      #           trace:
+      #             enable: true
+      #   containers:
+      #   - name: thanos-sidecar
+      #     envFrom:
+      #       - secretRef:
+      #           name: thanos-s3
+      # thanosService:
+      #   enabled: true
+      # thanosServiceExternal:
+      #   enabled: true
+      ingress:
+        enabled: false
+      # thanosIngress:
+      #   enabled: true
+      #   annotations:
+      #     cert-manager.io/cluster-issuer: cert-manager
+      #     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      #     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+      #     nginx.ingress.kubernetes.io/proxy-read-timeout: '160'
+      #     nginx.ingress.kubernetes.io/enable-access-log: "false"
+      #     nginx.ingress.kubernetes.io/enable-opentelemetry: "false"
+      #     external-dns.alpha.kubernetes.io/controller: no-external-dns
+      #   hosts:
+      #   - thanos-sidecar.k.flightaware.com
+      #   tls:
+      #     - hosts:
+      #       - thanos-sidecar.k.flightaware.com
+      #       secretName: thanos-tls
+      #   paths:
+      #   - /
+      #   pathType: Prefix
+      #   ingressClassName: ingress-nginx
+    grafana:
+      enabled: true
+      ingress:
+        enabled: false

@@ -1,0 +1,326 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: nvidia-gpu-operator
+  namespace: flux-system
+spec:
+  chart:
+    spec:
+      chart: gpu-operator
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: nvidia
+      version: "v25.3.4"
+  install:
+    crds: CreateReplace
+    createNamespace: true
+  interval: 5m
+  timeout: 5m
+  releaseName: nvidia-gpu-operator
+  targetNamespace: nvidia-gpu-operator
+  values:
+    nfd:
+      # Deploys Node Feature Discovery plugin as a daemonset. Set this variable
+      # to false if NFD is already running in the cluster.
+      enabled: true
+      # Installs node feature rules that are related to confidential computing.
+      # NFD uses the rules to detect security features in CPUs and NVIDIA GPUs.
+      # Set this variable to true when you configure the Operator for Confidential Containers.
+      # default is false
+      nodefeaturerules: false
+    cdi:
+      # When set to true, the Operator installs two additional runtime classes, 
+      # nvidia-cdi and nvidia-legacy, and enables the use of the Container Device 
+      # Interface (CDI) for making GPUs accessible to containers. Using CDI aligns
+      # the Operator with the recent efforts to standardize how complex devices 
+      # like GPUs are exposed to containerized environments.
+      # ref: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html
+      enabled: true
+      # We want this enabled, but don't want this to be the default runtime. 
+      default: false
+    # This daemonsets configuration is the default, but leaving here so it's clear what the taint/toleration is.
+    daemonsets:
+      priorityClassName: system-node-critical
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+    operator:
+      nodeSelector:
+        nvidia.com/gpu: "true"
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+    # default. no mig support on the gpus we have
+    mig:
+      strategy: single
+
+    # all of the defaults are used for driver
+    driver:
+      enabled: true
+      kernelModuleType: "auto"
+
+    toolkit:
+      enabled: true
+      # repository: nvcr.io/nvidia/k8s
+      image: container-toolkit
+      # # known-limitations for rke2
+      # # ref: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html#v24-9-0-known-limitations
+      # # it will fail with v1.17.0, so recommended to install v1.17.1-ubuntu20.04 or v1.17.1-ubi8
+      # # I think this will be fine with v1.17.4 / The default in values.yaml since it's > v1.17.1
+      # version: v1.17.4-ubuntu20.04
+
+      # # The below env's are set from the rke2 nvidia operator guide
+      # # ref: https://docs.rke2.io/advanced#deploy-nvidia-operator
+      env:
+        - name: CONTAINERD_CONFIG
+          value: /var/lib/rancher/rke2/agent/etc/containerd/config.toml
+        - name: CONTAINERD_SOCKET
+          value: /run/k3s/containerd/containerd.sock
+        - name: CONTAINERD_RUNTIME_CLASS
+          value: nvidia
+        - name: CONTAINERD_SET_AS_DEFAULT
+          value: "false"
+      # # defaults
+      # resources: {}
+      # installDir: "/usr/local/nvidia"
+
+    devicePlugin:
+      enabled: true
+      # # defaults used here.
+      # repository: nvcr.io/nvidia
+      # image: k8s-device-plugin
+      # version: v0.17.0
+      # imagePullPolicy: IfNotPresent
+      # imagePullSecrets: []
+      # args: []
+      # env:
+      #   - name: PASS_DEVICE_SPECS
+      #     value: "true"
+      #   - name: FAIL_ON_INIT_ERROR
+      #     value: "true"
+      #   - name: DEVICE_LIST_STRATEGY
+      #     value: envvar
+      #   - name: DEVICE_ID_STRATEGY
+      #     value: uuid
+      #   - name: NVIDIA_VISIBLE_DEVICES
+      #     value: all
+      #   - name: NVIDIA_DRIVER_CAPABILITIES
+      #     value: all
+      # resources: {}
+      # # Plugin configuration
+      # # Use "name" to either point to an existing ConfigMap or to create a new one with a list of configurations(i.e with create=true).
+      # # Use "data" to build an integrated ConfigMap from a set of configurations as
+      # # part of this helm chart. An example of setting "data" might be:
+      # # config:
+      # #   name: device-plugin-config
+      # #   create: true
+      # #   data:
+      # #     default: |-
+      # #       version: v1
+      # #       flags:
+      # #         migStrategy: none
+      # #     mig-single: |-
+      # #       version: v1
+      # #       flags:
+      # #         migStrategy: single
+      # #     mig-mixed: |-
+      # #       version: v1
+      # #       flags:
+      # #         migStrategy: mixed
+      # config:
+      #   # Create a ConfigMap (default: false)
+      #   create: false
+      #   # ConfigMap name (either existing or to create a new one with create=true above)
+      #   name: ""
+      #   # Default config name within the ConfigMap
+      #   default: ""
+      #   # Data section for the ConfigMap to create (i.e only applies when create=true)
+      #   data: {}
+      # # MPS related configuration for the plugin
+      # mps:
+      #   # MPS root path on the host
+      #   root: "/run/nvidia/mps"
+
+    # standalone dcgm hostengine
+    # # defaults used here, it's disabled.
+    # dcgm:
+    #   # disabled by default to use embedded nv-hostengine by exporter
+    #   enabled: false
+    #   repository: nvcr.io/nvidia/cloud-native
+    #   image: dcgm
+    #   version: 4.1.0-1-ubuntu22.04
+    #   imagePullPolicy: IfNotPresent
+    #   args: []
+    #   env: []
+    #   resources: {}
+    # # I couldn't find documentation on this so I disabled it, but it's enabled by default. 
+    # # I'm guessing it doesn't apply if dcgm is disabled. (which it is, by default.)
+    dcgmExporter:
+      enabled: false
+    #   repository: nvcr.io/nvidia/k8s
+    #   image: dcgm-exporter
+    #   version: 4.1.0-4.0.2-ubuntu22.04
+    #   imagePullPolicy: IfNotPresent
+    #   env:
+    #     - name: DCGM_EXPORTER_LISTEN
+    #       value: ":9400"
+    #     - name: DCGM_EXPORTER_KUBERNETES
+    #       value: "true"
+    #     - name: DCGM_EXPORTER_COLLECTORS
+    #       value: "/etc/dcgm-exporter/dcp-metrics-included.csv"
+    #   resources: {}
+    #   serviceMonitor:
+    #     enabled: false
+    #     interval: 15s
+    #     honorLabels: false
+    #     additionalLabels: {}
+    #     relabelings: []
+    #     # - source_labels:
+    #     #     - __meta_kubernetes_pod_node_name
+    #     #   regex: (.*)
+    #     #   target_label: instance
+    #     #   replacement: $1
+    #     #   action: replace
+    #   # DCGM Exporter configuration
+    #   # This block is used to configure DCGM Exporter to emit a customized list of metrics.
+    #   # Use "name" to either point to an existing ConfigMap or to create a new one with a
+    #   # list of configurations (i.e with create=true).
+    #   # When pointing to an existing ConfigMap, the ConfigMap must exist in the same namespace as the release.
+    #   # The metrics are expected to be listed under a key called `dcgm-metrics.csv`.
+    #   # Use "data" to build an integrated ConfigMap from a set of custom metrics as
+    #   # part of the chart. An example of some custom metrics are shown below. Note that
+    #   # the contents of "data" must be in CSV format and be valid DCGM Exporter metric configurations.
+    #   # config:
+    #     # name: custom-dcgm-exporter-metrics
+    #     # create: true
+    #     # data: |-
+    #       # Format
+    #       # If line starts with a '#' it is considered a comment
+    #       # DCGM FIELD, Prometheus metric type, help message
+
+    #       # Clocks
+    #       # DCGM_FI_DEV_SM_CLOCK,  gauge, SM clock frequency (in MHz).
+    #       # DCGM_FI_DEV_MEM_CLOCK, gauge, Memory clock frequency (in MHz).
+
+    # gpu feature discovery
+    # no idea how this differs from node-feature-discovery
+    # it looks like this has been deprecated for k8s-device-plugin, but is enabled by default..
+    gfd:
+      enabled: true
+
+    # mig isn't used, so disabling
+    migManager:
+      enabled: false
+
+    # # default
+    nodeStatusExporter:
+      enabled: false
+
+    # # default
+    gds:
+      enabled: false
+
+    # # default
+    gdrcopy:
+      enabled: false
+
+    # default is disabled
+    vgpuManager:
+      enabled: false
+
+    # it sounds like this requires a special enterprise license.
+    # I'm not sure if or how this is different from vgpuManager.
+    # ref: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/install-gpu-operator-vgpu.html
+    vgpuDeviceManager:
+      enabled: false
+
+    # I can't find any references to what this is in the docs.
+    vfioManager:
+      enabled: false
+
+    # default, disabled
+    kataManager:
+      enabled: false
+
+    # we don't use kata containers or vms, so disabling
+    # ref: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-operator-kata.html
+    sandboxDevicePlugin:
+      enabled: false
+
+    # default, disabled
+    ccManager:
+      enabled: false
+
+    node-feature-discovery:
+      # enable metrics collection
+      prometheus:
+        enabled: true
+      enableNodeFeatureApi: true
+      priorityClassName: system-node-critical
+      # this is in the default values for the sub-chart,
+      # it's unclear if this applies to all components in the subchart though.
+      nodeSelector:
+        nvidia.com/gpu: "true"
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      gc:
+        enable: true
+        replicaCount: 1
+        serviceAccount:
+          name: node-feature-discovery
+          create: false
+      worker:
+        # # defaults
+        # serviceAccount:
+        #   name: node-feature-discovery
+        #   # disable creation to avoid duplicate serviceaccount creation by master spec below
+        #   create: false
+
+        # tolerations:
+        # - key: "node-role.kubernetes.io/master"
+        #   operator: "Equal"
+        #   value: ""
+        #   effect: "NoSchedule"
+        # - key: "node-role.kubernetes.io/control-plane"
+        #   operator: "Equal"
+        #   value: ""
+        #   effect: "NoSchedule"
+        # - key: nvidia.com/gpu
+        #   operator: Exists
+        #   effect: NoSchedule
+        nodeSelector:
+          nvidia.com/gpu: "true"
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      # # defaults
+      #   config:
+      #     sources:
+      #       pci:
+      #         deviceClassWhitelist:
+      #         - "02"
+      #         - "0200"
+      #         - "0207"
+      #         - "0300"
+      #         - "0302"
+      #         deviceLabelFields:
+      #         - vendor
+      # master:
+      #   serviceAccount:
+      #     name: node-feature-discovery
+      #     create: true
+      #   config:
+      #     extraLabelNs: ["nvidia.com"]
+      #     # noPublish: false
+      #     # resourceLabels: ["nvidia.com/feature-1","nvidia.com/feature-2"]
+      #     # enableTaints: false
+      #     # labelWhiteList: "nvidia.com/gpu"

@@ -1,0 +1,26 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: envoygateway
+  namespace: flux-system
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: envoy
+  install:
+    crds: CreateReplace
+    createNamespace: true
+  interval: 5m
+  timeout: 5m
+  releaseName: eg
+  targetNamespace: envoy-gateway-system
+  values:
+    crds:
+      gatewayAPI:
+        enabled: true
+        channel: experimental
+      envoyGateway:
+        enabled: true
+    deployment:
+      replicas: 3

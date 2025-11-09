@@ -1,0 +1,70 @@
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   labels:
+#     app: qbt
+#   name: qbt
+#   namespace: qbt
+# spec:
+#   ingressClassName: ingress-nginx
+#   rules:
+#   - host: qbt.jburt.me
+#     http:
+#       paths:
+#       - backend:
+#           service:
+#             name: qbt
+#             port:
+#               name: http
+#         path: /
+#         pathType: Prefix
+#   tls:
+#   - hosts:
+#     - qbt.jburt.me
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   labels:
+#     app: qbt
+#   name: qbt
+#   namespace: qbt
+#   annotations:
+#     ingress.cilium.io/force-https: "true"
+# spec:
+#   ingressClassName: cilium
+#   rules:
+#   - host: qbt.jburt.me
+#     http:
+#       paths:
+#       - backend:
+#           service:
+#             name: qbt
+#             port:
+#               name: http
+#         path: /
+#         pathType: ImplementationSpecific
+#   tls:
+#   - hosts:
+#     - qbt.jburt.me
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: qbt
+  namespace: qbt
+spec:
+  parentRefs:
+  - name: eg
+    namespace: envoy-gateway-system
+  hostnames:
+  - "qbt.jburt.me"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: qbt
+      port: 80

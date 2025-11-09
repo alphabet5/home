@@ -1,0 +1,163 @@
+# ---
+# # Old pgvecto.rs postgres cluster.
+# apiVersion: postgresql.cnpg.io/v1
+# kind: Cluster
+# metadata:
+#   name: immich-postgres
+#   namespace: immich
+# spec:
+#   instances: 1
+#   affinity:
+#     nodeSelector:
+#       role: apps
+#   storage:
+#     size: 100Mi
+#     storageClass: local-path
+#   monitoring:
+#     enablePodMonitor: true
+#   superuserSecret:
+#     name: immich-postgres
+#   # At the time of writing, immich is only compatible with pgvecto.rs <0.4. Latest postgres image with that version is 16.5.
+#   imageName: ghcr.io/tensorchord/cloudnative-pgvecto.rs:16.5-v0.3.0@sha256:36990c811144f5d677afed75040a073811bc7b7a517a5509a2cb08e14d527834
+#   postgresql:
+#     shared_preload_libraries:
+#       - "vectors.so"
+#   managed:
+#     roles:
+#       - name: immich
+#         superuser: true
+#         login: true
+#   bootstrap:
+#     initdb:
+#       database: immich
+#       owner: immich
+#       secret:
+#         name: immich-postgres
+#       postInitSQL:
+#         - ALTER SYSTEM SET search_path TO "$user", public, vectors;
+#         - CREATE EXTENSION IF NOT EXISTS "vectors";
+#         # - CREATE EXTENSION IF NOT EXISTS "cube";
+#         # - CREATE EXTENSION IF NOT EXISTS "earthdistance";
+---
+# Here are the migration steps from pgvecto.rs to cloudnative-vectorchord:
+# ```bash
+# ~ % kubectl scale deployment --all -n immich --replicas=0
+# deployment.apps/immich-machine-learning scaled
+# deployment.apps/immich-redis scaled
+# deployment.apps/immich-server scaled
+# ~ % psql --dbname=postgres --username=immich -h 192.168.1.128
+# psql (14.17 (Homebrew), server 16.5 (Debian 16.5-1.pgdg110+1))
+# WARNING: psql major version 14, server major version 16.
+#          Some psql features might not work.
+# SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, bits: 256, compression: off)
+# Type "help" for help.
+
+# postgres=# \l
+#                              List of databases
+#    Name    |  Owner   | Encoding | Collate | Ctype |   Access privileges
+# -----------+----------+----------+---------+-------+-----------------------
+#  immich    | immich   | UTF8     | C       | C     |
+#  postgres  | postgres | UTF8     | C       | C     |
+#  template0 | postgres | UTF8     | C       | C     | =c/postgres          +
+#            |          |          |         |       | postgres=CTc/postgres
+#  template1 | postgres | UTF8     | C       | C     | postgres=CTc/postgres+
+#            |          |          |         |       | =c/postgres
+# (4 rows)
+
+# postgres=# \c immich
+# psql (14.17 (Homebrew), server 16.5 (Debian 16.5-1.pgdg110+1))
+# WARNING: psql major version 14, server major version 16.
+#          Some psql features might not work.
+# SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, bits: 256, compression: off)
+# You are now connected to database "immich" as user "immich".
+# immich=# SELECT atttypmod as dimsize
+# FROM pg_attribute f
+# JOIN pg_class c ON c.oid = f.attrelid
+# WHERE c.relkind = 'r'::char
+#   AND f.attnum > 0
+#   AND c.relname = 'smart_search'
+#   AND f.attname = 'embedding';
+#  dimsize
+# ---------
+#      512
+# (1 row)
+
+# immich=# DROP INDEX IF EXISTS clip_index;
+# DROP INDEX IF EXISTS face_index;
+
+# ALTER TABLE smart_search ALTER COLUMN embedding SET DATA TYPE real[];
+# ALTER TABLE face_search ALTER COLUMN embedding SET DATA TYPE real[];
+# DROP INDEX
+# DROP INDEX
+# ALTER TABLE
+# ALTER TABLE
+# immich=# exit
+# ```
+#
+# ```bash
+# ~ % pg_dump -Fc -U immich -h 192.168.1.128 -d immich -f immich_migration.dump
+# ~ % pg_restore -U immich -h 192.168.1.129 -d immich -Fc immich_migration.dump
+# pg_restore: error: could not execute query: ERROR:  extension "vectors" is not available
+# DETAIL:  Could not open extension control file "/usr/share/postgresql/16/extension/vectors.control": No such file or directory.
+# HINT:  The extension must first be installed on the system where PostgreSQL is running.
+# Command was: CREATE EXTENSION IF NOT EXISTS vectors WITH SCHEMA vectors;
+
+
+# pg_restore: error: could not execute query: ERROR:  extension "vectors" does not exist
+# Command was: COMMENT ON EXTENSION vectors IS 'vectors: Vector database plugin for Postgres, written in Rust, specifically designed for LLM';
+
+
+# pg_restore: warning: errors ignored on restore: 2
+# ~ % psql --dbname=postgres --username=immich -h 192.168.1.129
+# psql (16.9 (Homebrew))
+# SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+# Type "help" for help.
+
+# postgres=# \c immich
+# SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+# You are now connected to database "immich" as user "immich".
+# immich=# CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
+# NOTICE:  installing required extension "vector"
+# CREATE EXTENSION
+# immich=# ALTER TABLE smart_search ALTER COLUMN embedding SET DATA TYPE vector(512);
+# ALTER TABLE
+# immich=# ALTER TABLE face_search ALTER COLUMN embedding SET DATA TYPE vector(512);
+# ALTER TABLE
+# immich=# exit
+# ```
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: immich-db
+  namespace: immich
+spec:
+  instances: 3
+  affinity:
+    nodeSelector:
+      role: apps
+  storage:
+    size: 100Mi
+    storageClass: local-path
+  monitoring:
+    enablePodMonitor: true
+  superuserSecret:
+    name: immich-postgres
+  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:16-0.4.3
+  postgresql:
+    shared_preload_libraries:
+      - "vchord.so"
+  managed:
+    roles:
+      - name: immich
+        superuser: true
+        login: true
+  bootstrap:
+    initdb:
+      database: immich
+      owner: immich
+      secret:
+        name: immich-postgres
+      # postInitSQL:
+      #   - ALTER SYSTEM SET search_path TO "$user", public, vectors;
+      #   - CREATE EXTENSION IF NOT EXISTS "vectors";

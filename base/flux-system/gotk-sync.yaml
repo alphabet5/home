@@ -1,0 +1,45 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: home
+  namespace: flux-system
+  annotations:
+    sealedsecrets.bitnami.com/cluster-wide: "true"
+spec:
+  encryptedData:
+    identity: AgBC58iXv/3nq3J4J1cnGLRNi5Xl7v2zSWSck2A54k64eBAxjSf/4FprbNYgwNlarVzymCe4aiz1LhNCGhkW1EvKFVk9DqSkNJNN7cZAjW6F96vI0FKifu4jOLpJAZcF5RYJ4oiYFs5HRQ0ru4Qu31xBYGn9sYUFxy2/kCuXCShnpTPdK3M4h/hWFo2vmk45n/cR7DbvF8W1p7TF2FyKIbfncbcGM+DoK65D2fOR4aUsUNMXkaNefUor63OULQufr/fixNKB8/XYkojYEa+ljGlNHCZdNS+qdve7lWnjJXLy2E2wf6Zmze8mNGXrHCPh4WUVLo1CDUI0CHlTutidj8t0TRTotxLAARDobdYeS4WIeMh4h773BSPPYaYdaHHcsDiNNgzqEDD1IYtG4X7jxyGCMc398kfpUOlBfJcoUr2HzMrxNuq6sq3UjupHJLZkgfthTdKkr1Yl3Sp8uLmW3aOJXJDWdSl/3KPcJBRdSn18zpC6w8kN0ysNHa2yJT06Pn0LK2mAmJ1SW4BmBbNCBYVW7ynwbDInRK9c2wQBA+ZCVSkjB12KKKBYK+ajzBsBHkifjzYc3f6RiVHQ7jIU7rrXbHB+hWHDFHlpcBGctWaqsu7xGv4kNJ3p8hWQTu6z6DhSprz25FuvJ1TGotdigjQQ4FeXe3XBtDepULr0BbGpfPdTsYnndZBGyUDoK6Y5KyCl/oS452/msrOGyo5ai0UaH6BXXlOVFm7CtO7pES8KAWu5VNZKDnFSpMsj3OJ+CeWDoI0sbi/QdpVFCIHCE+ZLB2GtWkGMinM4OzrghfGpZqzfPfBI6Pu1eURBdeSdmlZC3cwuVF1feVRi/zXRx7PispV5CFmWivFj2MlkD0hRtR1ZYjtLOXZ1Nklwga8kanH5hpO2LW6ulyJcojdh1zL7/84hQrRZx/wohyP1Kc+496T1g1q5YhItsH6c4PPhLZpf5ABZAB3QRPidgwCT/p4afNrHV4dzS15zVAul0yDZHXmZXxZlGQc8+8/WPDM/1Y65vvBHhjcr3MCz/cbe8hAvTOrpWc5+JzMcUDRT1OwN1dzUqjIDGIGwdTqOD+PfeI1wInroP10SDhqXY2/P2xnYIh9SENTObLHQgt8iMEdfPk2dem7yoOvNd3wkOC5wPUFu7h9ULWm3DRmeEc65gWPtWUpTiXzNSGJSttIFyPCx2IlFXdOuFg8cjtl6icJcVyfGv3c=
+    known_hosts: AgC9jhVsbjFQWNXnB3Ecr9f+yZKdQpdLI8bMdrFQBy3IeY0wMgcYXpuUbJtrw39XwsrCpMSMsWqu6n05qlpY1p/T1Lc9d8RrDOTtqnjDqLe8agyN+uDoe+wEPOHUfkXUiIccNmFAPI3JErq1I5eDgU4SrIWTiTjY9xQ5WT1PEHtMdv+jAUualdN9ll6dEtPu93nI/oruOMiSYVWY1+l03l4wwDU7LPL4NZ0Lsje+Ycbdwtvsunzw1wMgLtfd1NDXR5lv/9DnbCyr04YKOvPjYcwh/VufmavWWS2AADX9GkcOqqJ86mEvRtjIg65Hzm9TD3MRLo9707OoEu4VcUv4JaxKfPp1TsOYqlGynAmJWwj/azHLSWLaVTPNXesCiTEN3Vkm2aK/pM0+1raJE7EN1WGn6CTbs6wxjWNmMXM9VWf0IyBXyGgHarY+whrlmE/00BoZTcLSR1Xg2uYtoDTkOXawQAiCbBOb0Ze1aqHqkn8O5VxWoRZ610rskz8UszYaG1QGQlxrews+JMZu/+rDeDj4GecJh3t9+ou9Ya9aro8jhqYaOII2atztGeU5IXVWnCdPzWoLBsPlMu7g9IoelolYtOXSyDA+HpErxDo/mx8FIrW71uRqDBnVyF9h8EanFcizr1pfjfDDIA/Z7kM22A/q29n+uPGn1DeF26le1fGlkU4FtY/WdKujgj+XCqeXXT370d+/xMXXiKZbMMnKOsLjkja3FRhaDXCmOn+2o6HSq7pVHN1OiCnO7F9liccvLqGeqX3RgDgBhSgbESTpopi3xTNaJhXD7rmo23CEBfXAXyCfqXZBo6zNB1jN
+  template:
+    metadata:
+      name: home
+      namespace: flux-system
+      annotations:
+        sealedsecrets.bitnami.com/cluster-wide: "true"
+    type: Opaque
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: home
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  secretRef:
+    name: home
+  url: ssh://git@github.com/alphabet5/home.git
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: home
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./base
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: home

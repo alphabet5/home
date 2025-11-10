@@ -1,7 +1,5 @@
 {
-  // "baseBranchPatterns": ["testing"],
-  // "gitAuthor": "Renovate Bot <renovate@local>",
-  // "minimumReleaseAge": "7 days",
+  "minimumReleaseAge": "7 days",
   "semanticCommits": "enabled",
   "enabledManagers": ["kubernetes", "flux"],
   "kubernetes": {"managerFilePatterns": ["/\\.ya?ml$/"]},

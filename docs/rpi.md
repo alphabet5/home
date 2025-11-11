@@ -264,3 +264,81 @@ echo "192.168.1.111 k1
 ```
 
 echo "192.168.1.119 k9" | sudo tee -a /etc/hosts
+
+
+## Node Maintenance
+
+Disable ceph from shuffling data around during maintenance.
+
+```bash
+kubectl rook-ceph ceph osd set noout
+kubectl rook-ceph ceph osd set norebalance
+kubectl rook-ceph ceph osd set nobackfill
+```
+
+Drain the node.
+
+```bash
+kubectl drain k6 --ignore-daemonsets --delete-local-data
+```
+
+Scale OSD's to 0
+
+```bash
+kubectl scale deployment -n rook-ceph rook-ceph-osd-0 --replicas=0
+```
+
+Resume after maintenance
+
+```bash
+kubectl rook-ceph ceph osd unset noout
+kubectl rook-ceph ceph osd unset norebalance
+kubectl rook-ceph ceph osd unset nobackfill
+```
+
+## back up stuff, switch to lvm
+
+```bash
+sudo /usr/local/bin/k3s-uninstall.sh
+sudo rm -rf /local/rancher
+sudo mkdir /local/rancher
+sudo swapoff -a
+sudo dphys-swapfile swapoff
+sudo systemctl disable dphys-swapfile
+sudo rsync -ra /local/ /mnt/local2/ --info=progress2 --exclude swap
+```
+
+```
+sudo -E -s
+rsync --rsync-path="sudo rsync" -ra /local/rook/ john.burt@k1:/local/rookk3/ --info=progress2
+```
+
+```bash
+sudo pvcreate /dev/sda
+sudo vgcreate local /dev/sda
+sudo lvcreate -L 200G -n md0 local
+sudo lvcreate -L 200G -n md1 local
+sudo lvcreate -L 10G -n local local
+sudo lvextend -l +100%FREE /dev/local/local
+```
+
+
+Then add this to /etc/fstab
+
+```
+/dev/local/local /local ext4 defaults 0 2
+```
+
+Then mount and re-copy
+
+```bash
+sudo systemctl daemon-reload
+sudo mount -a
+sudo rsync -ra /local2/ /local/
+sudo mkdir /local/rancher
+/usr/sbin/dphys-swapfile setup
+sudo dphys-swapfile swapon
+sudo systemctl enable dphys-swapfile
+sudo systemctl start dphys-swapfile
+
+```

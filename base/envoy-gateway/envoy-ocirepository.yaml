@@ -8,4 +8,4 @@ spec:
   interval: 5m
   url: oci://docker.io/envoyproxy/gateway-helm
   ref:
-    tag: 1.5.4
+    tag: 1.6.0

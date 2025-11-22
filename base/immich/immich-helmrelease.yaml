@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: immich
-      version: "0.10.1"
+      version: "0.10.3"
   interval: 5m
   releaseName: immich
   targetNamespace: immich

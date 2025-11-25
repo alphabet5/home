@@ -1,5 +1,4 @@
 {
-  "minimumReleaseAge": "1 days",
   "semanticCommits": "enabled",
   "enabledManagers": ["kubernetes", "flux"],
   "kubernetes": {"managerFilePatterns": ["/\\.ya?ml$/"]},
